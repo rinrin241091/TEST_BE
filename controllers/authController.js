@@ -37,8 +37,41 @@ exports.login = async (req, res) => {
         }
 
         const token = jwt.sign({ user_id: user[0].user_id, role: user[0].role }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.json({ message: 'Đăng nhập thành công', token });
+        
+        // Trả về thông tin role để frontend có thể điều hướng
+        res.json({ 
+            message: 'Đăng nhập thành công', 
+            token,
+            user: {
+                id: user[0].user_id,
+                username: user[0].username,
+                email: user[0].email,
+                role: user[0].role
+            }
+        });
     } catch (error) {
         res.status(500).json({ message: 'Lỗi khi đăng nhập', error });
+    }
+};
+
+// Lấy thông tin người dùng và role
+exports.getUserInfo = async (req, res) => {
+    try {
+        const [user] = await db.query('SELECT user_id, username, email, role FROM Users WHERE user_id = ?', [req.user.user_id]);
+        
+        if (user.length === 0) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+        }
+
+        res.json({
+            user: {
+                id: user[0].user_id,
+                username: user[0].username,
+                email: user[0].email,
+                role: user[0].role
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi khi lấy thông tin người dùng', error });
     }
 };

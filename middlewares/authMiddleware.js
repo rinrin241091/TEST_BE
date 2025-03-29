@@ -2,18 +2,40 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-//Middle xác thực người dùng dựa trên JWT
-const authMiddle = (req, res, next) => {
-    const token = req.header('Authorization');
-    if (!token)
-        return res.status(401).json({ message: 'Không có token, từ chối truy cập' });
+const verifyToken = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ message: 'Không tìm thấy token xác thực' });
+    }
+
     try {
-        const decoded = jwt.verify(token.replace('Bearer', ''), process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
         next();
     } catch (error) {
-        res.status(400).json({ message: 'Token không hợp lệ'});
+        return res.status(401).json({ message: 'Token không hợp lệ' });
     }
 };
 
-module.exports = authMiddleware;
+const isAdmin = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+        next();
+    } else {
+        res.status(403).json({ message: 'Bạn không có quyền truy cập trang này' });
+    }
+};
+
+const isUser = (req, res, next) => {
+    if (req.user && (req.user.role === 'user' || req.user.role === 'admin')) {
+        next();
+    } else {
+        res.status(403).json({ message: 'Bạn không có quyền truy cập trang này' });
+    }
+};
+
+module.exports = {
+    verifyToken,
+    isAdmin,
+    isUser
+};

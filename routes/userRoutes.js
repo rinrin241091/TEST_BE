@@ -2,19 +2,24 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const authMiddleware = require('../middlewares/authMiddleware');
-const roleMiddleware = require('../middlewares/roleMiddleware');
+const { verifyToken, isAdmin } = require('../middlewares/authMiddleware');
 
-// Lấy danh sách người dùng
-router.get('/users', authMiddleware, roleMiddleware(['admin']), userController.getUsers);
+// Tất cả các routes đều yêu cầu xác thực và quyền admin
+router.use(verifyToken, isAdmin);
 
-// Xem chi tiết người dùng
-router.get('/users/:id', authMiddleware, roleMiddleware(['admin']), userController.getUserById);
+// Lấy danh sách tất cả người dùng
+router.get('/', userController.getAllUsers);
 
-// Cập nhật vai trò người dùng
-router.put('/users/:id/role', authMiddleware, roleMiddleware(['admin']), userController.updateUserRole);
+// Lấy thông tin chi tiết một người dùng
+router.get('/:id', userController.getUserById);
+
+// Cập nhật thông tin người dùng
+router.put('/:id', userController.updateUser);
 
 // Xóa người dùng
-router.delete('/users/:id', authMiddleware, roleMiddleware(['admin']), userController.deleteUser);
+router.delete('/:id', userController.deleteUser);
+
+// Đổi mật khẩu người dùng
+router.put('/:id/change-password', userController.changePassword);
 
 module.exports = router;

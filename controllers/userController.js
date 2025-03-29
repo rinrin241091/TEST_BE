@@ -3,52 +3,81 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 
-//lấy danh sách người dùng
-exports.getUsers = async (req, res) => {
+// Lấy danh sách tất cả người dùng
+exports.getAllUsers = async (req, res) => {
     try {
-        const [users] = await db.query('SELECT user_id, username, email, role, created_at FROM Users');
+        const [users] = await db.query('SELECT user_id, username, email, role FROM Users');
         res.json(users);
-    }   catch (error) {
-        res.status(500).json({ message: 'Lỗi khi lấy người dùng', error});
-    }
-};    
-
-//Xem chi tiêt người dùng
-exports.getUserByID = async (req, res)  => {
-    const { id} = req.params;
-    try {
-        const [user] = await db.query('SELECT user_id, username, email, role, created_at FROM Users WHERE user_id = ?', [id]);
-        if (length === 0) {
-            return res.status(404).json({ message: 'Không tìm thấy người dùng'});
-        }
-        res.json(user[0]);
-    }   catch (error) {
-        res.status(500),json({ message: 'Lỗi khi lấy chi tiết người dùng', error});
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi khi lấy danh sách người dùng', error });
     }
 };
 
-// Cập nhật vai trò người dùng
-exports.updateUserRole = async (req, res) => {
-    const {id} = req.params;
-    const {role} = req.body;
-    if (!['student', 'teacher', 'admin'].includes(role)) {
-        return res.status(400).json({ message: 'Vai trò người dùng không hợp lệ'});
-    }
+// Lấy thông tin chi tiết một người dùng
+exports.getUserById = async (req, res) => {
     try {
-        await db.query('UPDATE Users SET role =? WHERE user_id =?', [role, id]);
-        res.json({ message: 'Cập nhật vai trò thành công'});
+        const [user] = await db.query('SELECT user_id, username, email, role FROM Users WHERE user_id = ?', [req.params.id]);
+        
+        if (user.length === 0) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+        }
+        
+        res.json(user[0]);
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi khi cập nhật vai trò', error});
+        res.status(500).json({ message: 'Lỗi khi lấy thông tin người dùng', error });
+    }
+};
+
+// Cập nhật thông tin người dùng
+exports.updateUser = async (req, res) => {
+    const { username, email, role } = req.body;
+    const userId = req.params.id;
+
+    try {
+        // Kiểm tra email đã tồn tại chưa (trừ user hiện tại)
+        const [existingUser] = await db.query(
+            'SELECT * FROM Users WHERE email = ? AND user_id != ?',
+            [email, userId]
+        );
+
+        if (existingUser.length > 0) {
+            return res.status(400).json({ message: 'Email đã được sử dụng' });
+        }
+
+        await db.query(
+            'UPDATE Users SET username = ?, email = ?, role = ? WHERE user_id = ?',
+            [username, email, role, userId]
+        );
+
+        res.json({ message: 'Cập nhật thông tin thành công' });
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi khi cập nhật thông tin', error });
     }
 };
 
 // Xóa người dùng
 exports.deleteUser = async (req, res) => {
-    const { id} = req.params;
     try {
-        await db.query('DELETE FROM Users WHERE user_id = ?', [id]);
-        res.json({ message: 'Xóa người dùng thành công'});
+        await db.query('DELETE FROM Users WHERE user_id = ?', [req.params.id]);
+        res.json({ message: 'Xóa người dùng thành công' });
     } catch (error) {
-        res.status(500).json({ message: 'L��i khi xóa người dùng', error});
+        res.status(500).json({ message: 'Lỗi khi xóa người dùng', error });
+    }
+};
+
+// Đổi mật khẩu người dùng
+exports.changePassword = async (req, res) => {
+    const { newPassword } = req.body;
+    const userId = req.params.id;
+
+    try {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await db.query(
+            'UPDATE Users SET password = ? WHERE user_id = ?',
+            [hashedPassword, userId]
+        );
+        res.json({ message: 'Đổi mật khẩu thành công' });
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi khi đổi mật khẩu', error });
     }
 };
