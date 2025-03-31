@@ -1,5 +1,6 @@
 // Kiểm tra JWT token và phân quyền
 const jwt = require('jsonwebtoken');
+const db = require('../config/database');
 require('dotenv').config();
 
 // Middleware xác thực token
@@ -7,38 +8,46 @@ const verifyToken = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ message: 'Không tìm thấy token xác thực' });
+        return res.status(401).json({ message: 'No token provided' });
     }
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
+        req.userId = decoded.userId;
+        req.userRole = decoded.role;
         next();
     } catch (error) {
-        return res.status(401).json({ message: 'Token không hợp lệ' });
+        return res.status(401).json({ message: 'Invalid token' });
     }
 };
 
 // Middleware kiểm tra role admin
 const isAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
-        next();
-    } else {
-        res.status(403).json({ message: 'Không có quyền truy cập' });
+    if (req.userRole !== 'admin') {
+        return res.status(403).json({ message: 'Requires admin role' });
     }
+    next();
 };
 
 // Middleware kiểm tra role giảng viên
 const isTeacher = (req, res, next) => {
-    if (req.user && (req.user.role === 'teacher' || req.user.role === 'admin')) {
-        next();
-    } else {
-        res.status(403).json({ message: 'Không có quyền truy cập' });
+    if (req.userRole !== 'teacher') {
+        return res.status(403).json({ message: 'Requires teacher role' });
     }
+    next();
+};
+
+// Middleware kiểm tra role sinh viên
+const isStudent = (req, res, next) => {
+    if (req.userRole !== 'student') {
+        return res.status(403).json({ message: 'Requires student role' });
+    }
+    next();
 };
 
 module.exports = {
     verifyToken,
     isAdmin,
-    isTeacher
+    isTeacher,
+    isStudent
 };
