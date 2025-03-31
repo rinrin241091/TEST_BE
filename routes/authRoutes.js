@@ -4,13 +4,11 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { verifyToken } = require('../middlewares/authMiddleware');
 
-// Đăng ký người dùng
+// Routes công khai
 router.post('/register', authController.register);
-
-// Đăng nhập người dùng
 router.post('/login', authController.login);
 
-// Kiểm tra role và trả về thông tin người dùng
-router.get('/me', verifyToken, authController.getUserInfo);
+// Routes yêu cầu xác thực
+router.get('/me', verifyToken, authController.getCurrentUser);
 
 module.exports = router;

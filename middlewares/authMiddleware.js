@@ -2,6 +2,7 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+// Middleware xác thực token
 const verifyToken = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
 
@@ -18,24 +19,26 @@ const verifyToken = (req, res, next) => {
     }
 };
 
+// Middleware kiểm tra role admin
 const isAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();
     } else {
-        res.status(403).json({ message: 'Bạn không có quyền truy cập trang này' });
+        res.status(403).json({ message: 'Không có quyền truy cập' });
     }
 };
 
-const isUser = (req, res, next) => {
-    if (req.user && (req.user.role === 'user' || req.user.role === 'admin')) {
+// Middleware kiểm tra role giảng viên
+const isTeacher = (req, res, next) => {
+    if (req.user && (req.user.role === 'teacher' || req.user.role === 'admin')) {
         next();
     } else {
-        res.status(403).json({ message: 'Bạn không có quyền truy cập trang này' });
+        res.status(403).json({ message: 'Không có quyền truy cập' });
     }
 };
 
 module.exports = {
     verifyToken,
     isAdmin,
-    isUser
+    isTeacher
 };

@@ -4,74 +4,134 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-// Đăng ký người dùng
+// Đăng ký tài khoản
 exports.register = async (req, res) => {
-    const { username, email, password, role } = req.body;
-
     try {
+        console.log('Register request received:', req.body);
+        
+        const { username, email, password, role } = req.body;
+        
+        // Validate input
+        if (!username || !email || !password) {
+            console.log('Missing required fields');
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+
+        // Kiểm tra email tồn tại
+        const [existingUser] = await db.query(
+            'SELECT * FROM Users WHERE email = ?',
+            [email]
+        );
+
+        if (existingUser.length > 0) {
+            console.log('User already exists:', email);
+            return res.status(400).json({ message: 'Email đã được sử dụng' });
+        }
+
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Thêm user mới
         const [result] = await db.query(
             'INSERT INTO Users (username, email, password, role) VALUES (?, ?, ?, ?)',
-            [username, email, hashedPassword, role]
+            [username, email, hashedPassword, role || 'user']
         );
-        res.json({ message: 'Đăng ký thành công', user_id: result.insertId });
+
+        console.log('User created successfully:', result.insertId);
+
+        // Tạo token
+        const token = jwt.sign(
+            { userId: result.insertId, role: role || 'user' },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        res.status(201).json({
+            message: 'Đăng ký thành công',
+            token,
+            user: {
+                id: result.insertId,
+                username,
+                email,
+                role: role || 'user',
+                created_at: new Date(),
+                updated_at: new Date()
+            }
+        });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi khi đăng ký', error });
+        console.error('Error in register:', error);
+        res.status(500).json({ message: 'Error registering user', error: error.message });
     }
 };
 
-// Đăng nhập người dùng
+// Đăng nhập
 exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const [user] = await db.query('SELECT * FROM Users WHERE email = ?', [email]);
-
-        if (user.length === 0) {
-            return res.status(400).json({ message: 'Email hoặc mật khẩu không chính xác' });
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin' });
         }
 
-        const isMatch = await bcrypt.compare(password, user[0].password);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Email hoặc mật khẩu không chính xác' });
+        // Kiểm tra user tồn tại
+        const [users] = await db.query(
+            'SELECT * FROM Users WHERE email = ?',
+            [email]
+        );
+
+        if (users.length === 0) {
+            return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
         }
 
-        const token = jwt.sign({ user_id: user[0].user_id, role: user[0].role }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        
-        // Trả về thông tin role để frontend có thể điều hướng
-        res.json({ 
-            message: 'Đăng nhập thành công', 
+        const user = users[0];
+
+        // Kiểm tra password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+        }
+
+        // Tạo token
+        const token = jwt.sign(
+            { userId: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        res.json({
+            message: 'Đăng nhập thành công',
             token,
             user: {
-                id: user[0].user_id,
-                username: user[0].username,
-                email: user[0].email,
-                role: user[0].role
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                created_at: user.created_at,
+                updated_at: user.updated_at
             }
         });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi khi đăng nhập', error });
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 };
 
-// Lấy thông tin người dùng và role
-exports.getUserInfo = async (req, res) => {
+// Lấy thông tin user hiện tại
+exports.getCurrentUser = async (req, res) => {
     try {
-        const [user] = await db.query('SELECT user_id, username, email, role FROM Users WHERE user_id = ?', [req.user.user_id]);
-        
+        const [user] = await db.query(
+            'SELECT id, username, email, role, created_at, updated_at FROM Users WHERE id = ?',
+            [req.user.userId]
+        );
+
         if (user.length === 0) {
             return res.status(404).json({ message: 'Không tìm thấy người dùng' });
         }
 
-        res.json({
-            user: {
-                id: user[0].user_id,
-                username: user[0].username,
-                email: user[0].email,
-                role: user[0].role
-            }
-        });
+        res.json(user[0]);
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi khi lấy thông tin người dùng', error });
+        console.error('Get current user error:', error);
+        res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 };
