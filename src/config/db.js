@@ -1,15 +1,19 @@
-const fs = require("fs");
-const path = require("path");
+const mysql = require('mysql2');
+require('dotenv').config();
 
-const dbPath = path.join(__dirname, "../data/users.json");
+const db = mysql.createConnection({
+  host: process.env.DB_HOST ,
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+});
 
-const getUsers = () => {
-  const data = fs.readFileSync(dbPath);
-  return JSON.parse(data);
-};
+db.connect((err) => {
+  if (err) {
+    console.error('Lỗi kết nối MySQL:', err);
+  } else {
+    console.log('Kết nối MySQL thành công!');
+  }
+});
 
-const saveUsers = (users) => {
-  fs.writeFileSync(dbPath, JSON.stringify(users, null, 2));
-};
-
-module.exports = { getUsers, saveUsers };
+module.exports = db;
