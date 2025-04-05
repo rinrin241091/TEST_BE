@@ -2,11 +2,11 @@
   "name": "cap2-nquiz-_be",
   "version": "1.0.0",
   "description": "cài thư viện cần thiết:\r npm init -y\r npm install express mysql2 bcryptjs jsonwebtoken dotenv body-parser cors\r (express: Dùng để tạo API.\r mysql2: Kết nối MySQL.\r bcryptjs: Mã hóa mật khẩu người dùng.\r jsonwebtoken: Tạo và xác thực JWT token.\r dotenv: Quản lý biến môi trường.\r body-parser: Xử lý body của request.\r cors: Cho phép CORS khi gọi API từ frontend.)",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon app.js",
-    "start": "nodemon app.js"
+    "dev": "nodemon server.js",
+    "start": "nodemon server.js"
   },
   "author": "",
   "license": "ISC",
@@ -21,5 +21,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
-  }
+  },
+  "keywords": []
 }
