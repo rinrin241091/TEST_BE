@@ -57,7 +57,12 @@ const login = async (data) => {
     return {
       accessToken,
       refreshToken,
-      email: foundUser.email,
+      user: {
+        email: foundUser.email,
+        username: foundUser.username,
+        avatar: foundUser.avatar,
+        role: foundUser.role,
+      },
     };
   } catch (error) {
     console.error("Login error:", error.message);
@@ -132,9 +137,117 @@ const verifyOTPAndUpdatePassword = async (email, otp, newPassword) => {
     throw new Error(error.message);
   }
 };
+
+const getUserByEmail = async (email) => {
+  try {
+    const query = "SELECT * FROM users WHERE email = ?";
+    const [users] = await db.promise().query(query, [email]);
+
+    if (!users || users.length === 0) {
+      return null;
+    }
+
+    return users[0];
+  } catch (error) {
+    throw new Error("Error fetching user profile");
+  }
+};
+
+// Admin User Management Services
+const getAllUsers = async () => {
+  try {
+    const query =
+      "SELECT user_id, username, email, role, created_at, updated_at FROM users";
+    const [users] = await db.promise().query(query);
+    return users;
+  } catch (error) {
+    throw new Error("Error fetching users");
+  }
+};
+
+const getUserById = async (id) => {
+  try {
+    const query =
+      "SELECT user_id, username, email, role, created_at, updated_at FROM users WHERE user_id = ?";
+    const [users] = await db.promise().query(query, [id]);
+
+    if (!users || users.length === 0) {
+      return null;
+    }
+
+    return users[0];
+  } catch (error) {
+    throw new Error("Error fetching user");
+  }
+};
+
+const createUser = async (userData) => {
+  try {
+    const { username, email, password, role } = userData;
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const query =
+      "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)";
+    const [result] = await db
+      .promise()
+      .query(query, [username, email, hashedPassword, role]);
+
+    return {
+      user_id: result.insertId,
+      username,
+      email,
+      role,
+      created_at: new Date(),
+    };
+  } catch (error) {
+    throw new Error("Error creating user");
+  }
+};
+
+const updateUser = async (id, userData) => {
+  try {
+    const { username, email, role } = userData;
+
+    const query =
+      "UPDATE users SET username = ?, email = ?, role = ? WHERE user_id = ?";
+    const [result] = await db
+      .promise()
+      .query(query, [username, email, role, id]);
+
+    if (result.affectedRows === 0) {
+      return null;
+    }
+
+    return {
+      user_id: id,
+      username,
+      email,
+      role,
+    };
+  } catch (error) {
+    throw new Error("Error updating user");
+  }
+};
+
+const deleteUser = async (id) => {
+  try {
+    const query = "DELETE FROM users WHERE user_id = ?";
+    const [result] = await db.promise().query(query, [id]);
+    return result.affectedRows > 0;
+  } catch (error) {
+    throw new Error("Error deleting user");
+  }
+};
+
 module.exports = {
   register,
   login,
   forgotPassword,
   verifyOTPAndUpdatePassword,
+  getUserByEmail,
+  getAllUsers,
+  getUserById,
+  createUser,
+  updateUser,
+  deleteUser,
 };
