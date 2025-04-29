@@ -10,7 +10,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 // Mount router với tiền tố "/user"
 app.use('/user', userRoutes);
-app.use('/question', questionRoutes);
+app.use('/questions', questionRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
