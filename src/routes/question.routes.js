@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require('../../config/db');
+const questionController = require('../controllers/questionController');
 
 // Create a new quiz
 router.post("/quiz", async (req, res) => {
@@ -32,51 +33,27 @@ router.post("/quiz", async (req, res) => {
   }
 });
 
-// Create a new question// Tạo câu hỏi mới
-router.post("/create", async (req, res) => {
-  console.log('Received request to create question');  // Log thông báo để kiểm tra
-
+// Create a new question
+router.post("/create-new-question", async (req, res) => {
   try {
-    const { quiz_id, question_text, question_type, answers, true_false_answer } = req.body;
-
-    console.log('Received question text:', question_text);
-
-    // Kiểm tra các trường bắt buộc
-    if (!quiz_id || !question_text || !question_type) {
-      return res.status(400).json({
-        success: false,
-        message: 'quiz_id, question_text, and question_type are required',
-      });
-    }
-
+    const { title, content, options, correctAnswer, type } = req.body;
     const connection = await pool.getConnection();
 
     try {
       await connection.beginTransaction();
 
-      // Thêm câu hỏi vào bảng questions
+      // Insert question
       const [questionResult] = await connection.query(
-        'INSERT INTO questions (quiz_id, question_text, question_type, created_at) VALUES (?, ?, ?, NOW())',
-        [quiz_id, question_text, question_type]
+        'INSERT INTO questions (title, content, type, created_at) VALUES (?, ?, ?, NOW())',
+        [title, content, type]
       );
       const questionId = questionResult.insertId;
 
-      // Thêm đáp án cho câu hỏi
-      if (question_type === 'multiple_choice' || question_type === 'checkboxes') {
-        for (const answer of answers) {
-          await connection.query(
-            'INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-            [questionId, answer.text, answer.isCorrect ? 1 : 0]
-          );
-        }
-      } else if (question_type === 'true_false') {
+      // Insert answers
+      for (const option of options) {
         await connection.query(
           'INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-          [questionId, 'True', true_false_answer === 'true' ? 1 : 0]
-        );
-        await connection.query(
-          'INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-          [questionId, 'False', true_false_answer === 'false' ? 1 : 0]
+          [questionId, option, option === correctAnswer]
         );
       }
 
@@ -102,7 +79,6 @@ router.post("/create", async (req, res) => {
     });
   }
 });
-
 
 // Get all questions
 router.get('/', async (req, res) => {
@@ -246,5 +222,8 @@ router.delete('/:id', (req, res) => {
     res.json({ message: 'Question deleted successfully' });
   });
 });
+
+// Get GPT explanation for a question
+router.get('/:id/explanation', questionController.getExplanation);
 
 module.exports = router; 
