@@ -1,82 +1,33 @@
-const express = require("express");
-const router = express.Router();
 const pool = require('../../config/db');
 
-// Tạo quiz mới
-router.post("/quiz", async (req, res) => {
+// Get explanation for a question (sample logic)
+const getExplanation = async (req, res) => {
+  const questionId = req.params.id;
+  res.json({
+    success: true,
+    explanation: `This is an AI-generated explanation for question ID ${questionId}.`
+  });
+};
+
+// Create a new question
+const createQuestion = async (req, res) => {
   try {
-    const { title, description } = req.body;
-    const connection = await pool.getConnection();
-
-    try {
-      const [result] = await connection.query(
-        'INSERT INTO quizzes (title, description, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
-        [title, description]
-      );
-
-      res.status(201).json({
-        success: true,
-        message: 'Quiz created successfully',
-        data: { quiz_id: result.insertId }
-      });
-    } finally {
-      connection.release();
-    }
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
-  }
-});
-
-// Tạo câu hỏi mới
-router.post("/create", async (req, res) => {
-  console.log('Received request to create question');  // Log thông báo để kiểm tra
-
-  try {
-    const { quiz_id, question_text, question_type, answers, true_false_answer } = req.body;
-
-    console.log('Received question text:', question_text);
-
-    // Kiểm tra các trường bắt buộc
-    if (!quiz_id || !question_text || !question_type) {
-      return res.status(400).json({
-        success: false,
-        message: 'quiz_id, question_text, and question_type are required',
-      });
-    }
-
+    const { quiz_id, question_text, question_type, options, correctAnswer, time_limit, points } = req.body;
     const connection = await pool.getConnection();
 
     try {
       await connection.beginTransaction();
 
-      // Thêm câu hỏi vào bảng questions
       const [questionResult] = await connection.query(
-        'INSERT INTO questions (quiz_id, question_text, question_type, created_at) VALUES (?, ?, ?, NOW())',
-        [quiz_id, question_text, question_type]
+        'INSERT INTO questions (quiz_id, question_text, question_type, time_limit, points, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+        [quiz_id, question_text, question_type, time_limit, points]
       );
       const questionId = questionResult.insertId;
 
-      // Thêm đáp án cho câu hỏi
-      if (question_type === 'multiple_choice' || question_type === 'checkboxes') {
-        for (const answer of answers) {
-          await connection.query(
-            'INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-            [questionId, answer.text, answer.isCorrect ? 1 : 0]
-          );
-        }
-      } else if (question_type === 'true_false') {
+      for (const option of options) {
         await connection.query(
           'INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-          [questionId, 'True', true_false_answer === 'true' ? 1 : 0]
-        );
-        await connection.query(
-          'INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-          [questionId, 'False', true_false_answer === 'false' ? 1 : 0]
+          [questionId, option, option === correctAnswer]
         );
       }
 
@@ -85,7 +36,7 @@ router.post("/create", async (req, res) => {
       res.status(201).json({
         success: true,
         message: 'Question created successfully',
-        data: { questionId }
+        data: { question_id: questionId }
       });
     } catch (error) {
       await connection.rollback();
@@ -101,44 +52,171 @@ router.post("/create", async (req, res) => {
       error: error.message
     });
   }
-});
+};
 
-// Lấy danh sách câu hỏi của một quiz
-router.get('/:quizId', async (req, res) => {
-  const { quizId } = req.params;
-  
-  let connection;
+// Get all questions
+const getAllQuestions = async (req, res) => {
   try {
-    connection = await pool.getConnection();
+    const connection = await pool.getConnection();
+    try {
+      const [questions] = await connection.query(`
+        SELECT q.*, GROUP_CONCAT(
+          JSON_OBJECT(
+            'answer_id', a.answer_id,
+            'answer_text', a.answer_text,
+            'is_correct', a.is_correct
+          )
+        ) as answers
+        FROM questions q
+        LEFT JOIN answers a ON q.question_id = a.question_id
+        GROUP BY q.question_id
+        ORDER BY q.created_at DESC
+      `);
 
-    const [questions] = await connection.query(
-      'SELECT * FROM questions WHERE quiz_id = ?',
-      [quizId]
-    );
+      const formattedQuestions = questions.map(q => {
+        const answers = JSON.parse(`[${q.answers}]`);
+        return {
+          question_id: q.question_id,
+          quiz_id: q.quiz_id,
+          question_text: q.question_text,
+          question_type: q.question_type,
+          time_limit: q.time_limit,
+          points: q.points,
+          options: answers.map(a => a.answer_text),
+          correctAnswer: answers.find(a => a.is_correct)?.answer_text
+        };
+      });
 
-    // Lấy đáp án cho mỗi câu hỏi
-    for (let question of questions) {
-      const [answers] = await connection.query(
-        'SELECT * FROM answers WHERE question_id = ?',
-        [question.question_id]
-      );
-      question.answers = answers;
+      res.json({
+        success: true,
+        data: formattedQuestions
+      });
+    } finally {
+      connection.release();
     }
-
-    res.status(200).json({
-      success: true,
-      data: questions
-    });
   } catch (error) {
-    console.error('Error getting quiz questions:', error);
-    res.status(500).json({
+    console.error('Error:', error);
+    res.status(500).json({ 
       success: false,
-      message: 'Error getting quiz questions',
+      message: 'Internal server error',
       error: error.message
     });
-  } finally {
-    if (connection) connection.release();
   }
-});
+};
 
-module.exports = router;
+// Get question by ID
+const getQuestionById = async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    try {
+      const [questions] = await connection.query(`
+        SELECT q.*, GROUP_CONCAT(
+          JSON_OBJECT(
+            'answer_id', a.answer_id,
+            'answer_text', a.answer_text,
+            'is_correct', a.is_correct
+          )
+        ) as answers
+        FROM questions q
+        LEFT JOIN answers a ON q.question_id = a.question_id
+        WHERE q.question_id = ?
+        GROUP BY q.question_id
+      `, [req.params.id]);
+
+      if (questions.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Question not found'
+        });
+      }
+
+      const q = questions[0];
+      const answers = q.answers ? JSON.parse(`[${q.answers}]`) : [];
+      const question = {
+        question_id: q.question_id,
+        quiz_id: q.quiz_id,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        time_limit: q.time_limit,
+        points: q.points,
+        options: answers.map(a => a.answer_text),
+        correctAnswer: answers.find(a => a.is_correct)?.answer_text
+      };
+
+      res.json({
+        success: true,
+        data: question
+      });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Update question
+const updateQuestion = async (req, res) => {
+  try {
+    const { question_text, question_type, time_limit, points } = req.body;
+    const connection = await pool.getConnection();
+
+    try {
+      const [result] = await connection.query(
+        `UPDATE questions 
+         SET question_text = ?, question_type = ?, time_limit = ?, points = ?
+         WHERE question_id = ?`,
+        [question_text, question_type, time_limit, points, req.params.id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Question not found' });
+      }
+
+      res.json({ message: 'Question updated successfully' });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error updating question:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Delete question
+const deleteQuestion = async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    try {
+      const [result] = await connection.query(
+        'DELETE FROM questions WHERE question_id = ?', 
+        [req.params.id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Question not found' });
+      }
+
+      res.json({ message: 'Question deleted successfully' });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error deleting question:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+module.exports = {
+  getExplanation,
+  createQuestion,
+  getAllQuestions,
+  getQuestionById,
+  updateQuestion,
+  deleteQuestion
+};
